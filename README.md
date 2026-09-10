@@ -209,8 +209,8 @@ Before starting, ensure you have the following installed on your system:
 This branch adds two AI audio features that run entirely in the browser via ONNX Runtime Web, using
 the W3C WebNN API for Intel NPU/GPU acceleration with an automatic WASM (CPU) fallback:
 
-* **Separate Stems…** — splits an audio region into drums, bass, vocals and other (HTDemucs v4).
-* **Suppress Noise (AI)…** — removes background noise from a recording (DeepFilterNet3).
+* **Separate Stems…** : splits an audio region into drums, bass, vocals and other (HTDemucs v4).
+* **Suppress Noise (AI)…** : removes background noise from a recording (DeepFilterNet3).
 
 Both are reachable by right-clicking an audio region in the timeline, and under the File → Import menu.
 
@@ -223,7 +223,7 @@ npm run models:fetch
 ```
 
 This downloads ~180 MB into `packages/app/studio/public/models/` and derives the DeepFilterNet3
-WebNN variants locally. It is idempotent — re-running skips anything already present. Use `--force`
+WebNN variants locally. Re-running skips anything already present. Use `--force`
 to re-download and `--verify` to diff the derived models against their originals.
 
 **Prerequisites:** `curl`, `tar`, and Python 3 with `onnx` and `numpy` (`pip install onnx numpy`).
@@ -243,9 +243,9 @@ but still recompile.
 
 #### Model attribution
 
-* **HTDemucs v4** — Meta Research (MIT), exported to ONNX and hosted at
+* **HTDemucs v4** : Meta Research (MIT), exported to ONNX and hosted at
   [Intel/demucs-openvino](https://huggingface.co/Intel/demucs-openvino).
-* **DeepFilterNet3** — [Rikorose/DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (MIT),
+* **DeepFilterNet3** : [Rikorose/DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (MIT),
   from `models/DeepFilterNet3_onnx.tar.gz`. The `.webnn.onnx` variants are derived locally by
   `scripts/rewrite_gru_for_webnn.py`, which rewrites `GRU(linear_before_reset=1)` nodes as `Scan`
   subgraphs to work around a WebNN GRU attribute bug in ONNX Runtime.
