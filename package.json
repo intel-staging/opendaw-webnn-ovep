@@ -9,6 +9,7 @@
   "scripts": {
     "cert": "bash ./scripts/cert.sh",
     "clean": "bash ./scripts/clean.sh",
+    "models:fetch": "node ./scripts/fetch-ai-models.mjs",
     "build": "turbo build --output-logs=full",
     "dev:studio": "turbo run dev --filter=@opendaw/app-studio",
     "dev:lab": "turbo run dev --filter=@opendaw/lab",

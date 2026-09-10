@@ -1,7 +1,8 @@
 import {isDefined} from "@opendaw/lib-std"
+import {apiUrl} from "@/OpenDAWApi"
 
 const STORAGE_KEY = "reported-latencies"
-const API_URL = "https://api.opendaw.studio/latency/report.php"
+const API_URL = apiUrl("/latency/report.php")
 const MAX_MS = 500
 
 const bucketMs = (context: AudioContext): number => {

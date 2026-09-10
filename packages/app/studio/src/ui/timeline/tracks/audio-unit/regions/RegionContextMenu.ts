@@ -22,6 +22,8 @@ import {Dialogs} from "@/ui/components/dialogs.tsx"
 import {StudioService} from "@/service/StudioService"
 import {Promises} from "@opendaw/lib-runtime"
 import {RegionsShortcuts} from "@/ui/shortcuts/RegionsShortcuts"
+import {showStemSeparatorDialog} from "@/ui/dialogs/StemSeparatorDialog"
+import {showNoiseSuppressorDialog} from "@/ui/dialogs/NoiseSuppressorDialog"
 
 type Construct = {
     element: Element
@@ -189,6 +191,40 @@ export const installRegionContextMenu =
                             Dialogs.info({headline: "BPMTools", message: `${bpm.toFixed(3)} BPM`})
                                 .finally()
                         })
+                    }
+                }),
+                MenuItem.default({
+                    label: "Separate Stems…",
+                    hidden: region.type !== "audio-region",
+                    separatorBefore: true
+                }).setTriggerProcedure(() => {
+                    if (region.type === "audio-region") {
+                        region.file.audioData.then(data => {
+                            const frames = Array.from({length: data.numberOfChannels}, (_, ch) =>
+                                new Float32Array(data.frames[ch]))
+                            void showStemSeparatorDialog(service, {
+                                name: region.label || "region",
+                                frames,
+                                sampleRate: data.sampleRate
+                            })
+                        }).catch(console.warn)
+                    }
+                }),
+                MenuItem.default({
+                    label: "Suppress Noise (AI)…",
+                    hidden: region.type !== "audio-region"
+                }).setTriggerProcedure(() => {
+                    if (isInstanceOf(region, AudioRegionBoxAdapter)) {
+                        region.file.audioData.then(data => {
+                            const frames = Array.from({length: data.numberOfChannels}, (_, ch) =>
+                                new Float32Array(data.frames[ch]))
+                            void showNoiseSuppressorDialog(service, {
+                                sourceRegion: region,
+                                name: region.label || "region",
+                                frames,
+                                sampleRate: data.sampleRate
+                            })
+                        }).catch(console.warn)
                     }
                 }),
                 DebugMenus.debugBox(region.box)

@@ -3,6 +3,7 @@ import {Html} from "@opendaw/lib-dom"
 import {createElement} from "@opendaw/lib-jsx"
 import {DemoProjectJson} from "@/ui/dashboard/DemoProjectJson"
 import {Bytes, Exec, Strings} from "@opendaw/lib-std"
+import {apiUrl} from "@/OpenDAWApi"
 
 const className = Html.adoptStyleSheet(css, "DemoProject")
 
@@ -13,7 +14,7 @@ type Construct = {
 
 export const DemoProject = ({json, load}: Construct) => {
     const coverUrl = json.hasCover
-        ? `https://api.opendaw.studio/music/cover.php?id=${json.id}&preview=true`
+        ? apiUrl(`/music/cover.php?id=${json.id}&preview=true`)
         : "./empty.svg"
     return (
         <div className={className} onclick={load}>

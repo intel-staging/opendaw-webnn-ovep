@@ -12,6 +12,7 @@ import {
     BuildInfo,
     DailySeries,
     DiscordStats,
+    dropPartialDay,
     ErrorStats,
     fetchBuildInfo,
     fetchDiscordStats,
@@ -67,7 +68,12 @@ type StatsBodyProps = {
     tiles: LiveTiles
 }
 
-const StatsBody = ({lifecycle, data, tiles}: StatsBodyProps) => {
+const StatsBody = ({lifecycle, data: rawData, tiles}: StatsBodyProps) => {
+    const data: DashboardData = {
+        rooms: {count: dropPartialDay(rawData.rooms.count), duration: dropPartialDay(rawData.rooms.duration)},
+        users: dropPartialDay(rawData.users),
+        visitors: dropPartialDay(rawData.visitors)
+    }
     const dates = unionDates(data)
     if (dates.length === 0) {
         return <div className="loading">No statistics available yet.</div>
@@ -105,7 +111,7 @@ const StatsBody = ({lifecycle, data, tiles}: StatsBodyProps) => {
             <div className="grid">
                 <div className="span-12">
                     <Card title="Daily Unique Visitors" accent={<span>unique visitors per day</span>} className="hero">
-                        <BarChart lifecycle={lifecycle} series={visitorsSeries} color={Colors.orange.toString()}/>
+                        <LineChart lifecycle={lifecycle} series={visitorsSeries} color={Colors.orange.toString()}/>
                         <RangeControl lifecycle={lifecycle} dates={visitorDates} range={visitorRange}/>
                     </Card>
                 </div>

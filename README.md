@@ -204,6 +204,52 @@ Before starting, ensure you have the following installed on your system:
 * `npm run dev:studio` | `npm run dev:headless` (start dev server)
 * Navigate to https://localhost:8080 (port is important > cors sample api)
 
+### AI Audio Features (WebNN / OpenVINO)
+
+This branch adds two AI audio features that run entirely in the browser via ONNX Runtime Web, using
+the W3C WebNN API for Intel NPU/GPU acceleration with an automatic WASM (CPU) fallback:
+
+* **Separate Stems…** — splits an audio region into drums, bass, vocals and other (HTDemucs v4).
+* **Suppress Noise (AI)…** — removes background noise from a recording (DeepFilterNet3).
+
+Both are reachable by right-clicking an audio region in the timeline, and under the File → Import menu.
+
+#### Fetching the models
+
+The ONNX weights are not stored in git. After `npm install`, run:
+
+```
+npm run models:fetch
+```
+
+This downloads ~180 MB into `packages/app/studio/public/models/` and derives the DeepFilterNet3
+WebNN variants locally. It is idempotent — re-running skips anything already present. Use `--force`
+to re-download and `--verify` to diff the derived models against their originals.
+
+**Prerequisites:** `curl`, `tar`, and Python 3 with `onnx` and `numpy` (`pip install onnx numpy`).
+Python is only needed to produce the DeepFilterNet3 WebNN variants; stem separation does not require
+it. The script checks for all three up front and fails with instructions rather than downloading first.
+
+Behind a proxy, set `HTTP_PROXY` / `HTTPS_PROXY` before running — the script shells out to `curl`, so
+it picks them up automatically. If TLS fails with a revocation error (common behind an intercepting
+proxy on Windows), the script retries once with `--ssl-no-revoke`.
+
+#### Hardware
+
+Acceleration needs a WebNN-capable browser (Chrome 120+) on Intel Core Ultra (NPU) or Intel Arc/iGPU.
+Without WebNN, both features still run on the WASM CPU backend in any modern browser, more slowly.
+The first NPU run compiles the graph, which takes roughly 45–100 s; later runs reuse the OPFS cache
+but still recompile.
+
+#### Model attribution
+
+* **HTDemucs v4** — Meta Research (MIT), exported to ONNX and hosted at
+  [Intel/demucs-openvino](https://huggingface.co/Intel/demucs-openvino).
+* **DeepFilterNet3** — [Rikorose/DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (MIT),
+  from `models/DeepFilterNet3_onnx.tar.gz`. The `.webnn.onnx` variants are derived locally by
+  `scripts/rewrite_gru_for_webnn.py`, which rewrites `GRU(linear_before_reset=1)` nodes as `Scan`
+  subgraphs to work around a WebNN GRU attribute bug in ONNX Runtime.
+
 ### Flow Charts
 
 <img width="6551" height="7057" alt="image" src="https://github.com/user-attachments/assets/266a9fb2-4b72-4752-bcf1-85fda2ff2cf1" />

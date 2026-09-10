@@ -32,17 +32,22 @@ import {Dialogs} from "@/ui/components/dialogs.tsx"
 import {BuildInfo} from "@/BuildInfo.ts"
 import {SamplePlayback} from "@/service/SamplePlayback"
 import {ProjectProfileService} from "./ProjectProfileService"
+
+type StemChannels = {readonly left: Float32Array, readonly right: Float32Array}
+type StemsPayload = {readonly drums: StemChannels, readonly bass: StemChannels, readonly other: StemChannels, readonly vocals: StemChannels}
+const STEM_NAMES = ["drums", "bass", "other", "vocals"] as const satisfies ReadonlyArray<keyof StemsPayload>
 import {StudioSignal} from "./StudioSignal"
 import {AudioOutputDevice} from "@/audio/AudioOutputDevice"
 import {FooterLabel} from "@/service/FooterLabel"
 import {RouteLocation} from "@opendaw/lib-jsx"
-import {PPQN} from "@opendaw/lib-dsp"
+import {AudioData, PPQN, WavFile} from "@opendaw/lib-dsp"
 import {AnimationFrame, Browser, ConsoleCommands, Dragging, Files} from "@opendaw/lib-dom"
 import {Promises} from "@opendaw/lib-runtime"
-import {ExportStemsConfiguration, InstrumentFactories, PresetDecoder} from "@opendaw/studio-adapters"
+import {AudioRegionBoxAdapter, ExportStemsConfiguration, InstrumentFactories, PresetDecoder, Sample} from "@opendaw/studio-adapters"
 import {Address} from "@opendaw/lib-box"
 import {
     AudioContentFactory,
+    AudioFileBoxFactory,
     AudioWorklets,
     CloudAuthManager,
     DawProjectService,
@@ -62,7 +67,8 @@ import {
     SampleService,
     SoundfontService,
     StudioPreferences,
-    TimelineRange
+    TimelineRange,
+    Workers
 } from "@opendaw/studio-core"
 import {ProjectDialogs} from "@/project/ProjectDialogs"
 import {AudioFileBox, AudioUnitBox} from "@opendaw/studio-boxes"
@@ -311,11 +317,7 @@ export class StudioService implements ProjectEnv {
                 return !name.startsWith("._")
             })
         if (audioEntries.length === 0) {return}
-        if (!this.hasProfile) {
-            this.#projectProfileService.setValue(Option.wrap(
-                new ProjectProfile(UUID.generate(), Project.new(this), ProjectMeta.init("Untitled"), Option.None)))
-        }
-        const {editing, boxGraph, api} = this.project
+        this.#ensureProfile()
         let aborted = false
         const onCancel = () => {aborted = true}
         let dialog = RuntimeNotifier.progress({headline: "Importing Stems...", cancel: onCancel})
@@ -326,17 +328,14 @@ export class StudioService implements ProjectEnv {
             dialog.message = `Importing ${name} (${index + 1}/${audioEntries.length})`
             const arrayBuffer = await file.async("arraybuffer").then(buffer => buffer.slice(0))
             if (aborted) {break}
-            const {status, value: sample, error} = await Promises.tryCatch(this.#sampleService.importFile({
-                name,
-                arrayBuffer
-            }))
+            const result = await this.#importSampleAsTapeTrack(name, arrayBuffer, () => aborted)
             if (aborted) {break}
-            if (status === "rejected") {
-                console.warn(`Failed to import '${name}'`, error)
+            if (result.status === "rejected") {
+                console.warn(`Failed to import '${name}'`, result.error)
                 dialog.terminate()
                 const skip = await RuntimeNotifier.approve({
                     headline: `Failed to import '${name}'`,
-                    message: String(error),
+                    message: String(result.error),
                     approveText: "Skip",
                     cancelText: "Cancel Import"
                 })
@@ -344,24 +343,121 @@ export class StudioService implements ProjectEnv {
                 dialog = RuntimeNotifier.progress({headline: "Importing Stems...", cancel: onCancel})
                 continue
             }
-            const uuid = UUID.parse(sample.uuid)
-            await Promises.tryCatch(this.sampleManager.getAudioData(uuid))
-            if (aborted) {break}
-            editing.modify(() => {
-                const {trackBox, instrumentBox} = api.createInstrument(InstrumentFactories.Tape)
-                instrumentBox.label.setValue(name)
-                const audioFileBox = boxGraph.findBox<AudioFileBox>(uuid)
-                    .unwrapOrElse(() => AudioFileBox.create(boxGraph, uuid, box => {
-                        box.fileName.setValue(name)
-                        box.startInSeconds.setValue(0)
-                        box.endInSeconds.setValue(sample.duration)
-                    }))
-                AudioContentFactory.createNotStretchedRegion({
-                    boxGraph, sample, audioFileBox, position: 0, targetTrack: trackBox
-                })
-            })
         }
         dialog.terminate()
+    }
+
+    async importSeparatedStems(sourceFilename: string, sampleRate: number, stems: StemsPayload): Promise<void> {
+        const baseName = sourceFilename.replace(/\.[^.]+$/, "") || "Stems"
+        this.#ensureProfile()
+        let aborted = false
+        const onCancel = () => {aborted = true}
+        const dialog = RuntimeNotifier.progress({headline: "Importing Stems...", cancel: onCancel})
+        for (let index = 0; index < STEM_NAMES.length; index++) {
+            if (aborted) {break}
+            const stemName = STEM_NAMES[index]
+            const channels = stems[stemName]
+            const name = `${baseName} — ${stemName}`
+            dialog.message = `Importing ${stemName} (${index + 1}/${STEM_NAMES.length})`
+            const arrayBuffer = this.#encodeStemAsWav(channels, sampleRate)
+            const result = await this.#importSampleAsTapeTrack(name, arrayBuffer, () => aborted)
+            if (result.status === "rejected") {
+                console.warn(`Failed to import stem '${stemName}'`, result.error)
+            }
+        }
+        dialog.terminate()
+    }
+
+    async importDenoisedRegion(sourceRegion: AudioRegionBoxAdapter, denoised: {left: Float32Array, right: Float32Array, sampleRate: number}): Promise<void> {
+        this.#ensureProfile()
+        const {left, right, sampleRate} = denoised
+        const audioData = AudioData.create(sampleRate, left.length, 2)
+        audioData.frames[0].set(left)
+        audioData.frames[1].set(right)
+        const sourceName = sourceRegion.label || sourceRegion.file.fileName || "region"
+        const name = `${sourceName} (denoised)`
+        const arrayBuffer = WavFile.encodeFloats(audioData)
+        const importResult = await Promises.tryCatch(this.#sampleService.importFile({name, arrayBuffer}))
+        if (importResult.status === "rejected") {
+            console.warn("importDenoisedRegion: sample import failed", importResult.error)
+            return
+        }
+        const sample = importResult.value
+        const uuid = UUID.parse(sample.uuid)
+        const audioFileBoxModifier = await AudioFileBoxFactory.createModifier(
+            Workers.Transients, this.project.boxGraph, audioData, uuid, name)
+        const {editing, boxGraph} = this.project
+        editing.modify(() => {
+            const audioFileBox = audioFileBoxModifier()
+            const sourcePosition = sourceRegion.position
+            const sourceTrack = sourceRegion.trackBoxAdapter.unwrap().box
+            sourceRegion.box.delete()
+            AudioContentFactory.createNotStretchedRegion({
+                boxGraph,
+                targetTrack: sourceTrack,
+                audioFileBox,
+                sample,
+                position: sourcePosition
+            })
+            this.project.trackUserCreatedSample(uuid)
+        })
+        await Promises.tryCatch(this.sampleManager.getAudioData(uuid))
+    }
+
+    async importDenoisedAsTapeTrack(name: string, denoised: {left: Float32Array, right: Float32Array, sampleRate: number}): Promise<void> {
+        this.#ensureProfile()
+        const {left, right, sampleRate} = denoised
+        const arrayBuffer = WavFile.encodeFloats({
+            sampleRate, length: left.length, numberOfChannels: 2,
+            getChannelData: ch => ch === 0 ? left : right
+        })
+        const result = await this.#importSampleAsTapeTrack(`denoised: ${name}`, arrayBuffer, () => false)
+        if (result.status === "rejected") {
+            console.warn("importDenoisedAsTapeTrack: failed", result.error)
+        }
+    }
+
+    #encodeStemAsWav(channels: StemChannels, sampleRate: number): ArrayBuffer {
+        const {left, right} = channels
+        const length = left.length
+        return WavFile.encodeFloats({
+            sampleRate,
+            length,
+            numberOfChannels: 2,
+            getChannelData: channel => channel === 0 ? left : right
+        })
+    }
+
+    #ensureProfile(): void {
+        if (this.hasProfile) {return}
+        this.#projectProfileService.setValue(Option.wrap(
+            new ProjectProfile(UUID.generate(), Project.new(this), ProjectMeta.init("Untitled"), Option.None)))
+    }
+
+    async #importSampleAsTapeTrack(name: string, arrayBuffer: ArrayBuffer, aborted: () => boolean)
+        : Promise<Promises.ResolveResult<Sample> | Promises.RejectedResult> {
+        const importResult = await Promises.tryCatch(this.#sampleService.importFile({name, arrayBuffer}))
+        if (importResult.status === "rejected") {return importResult}
+        if (aborted()) {return importResult}
+        const sample = importResult.value
+        const uuid = UUID.parse(sample.uuid)
+        if (aborted()) {return importResult}
+        const {editing, boxGraph, api} = this.project
+        editing.modify(() => {
+            const {trackBox, instrumentBox} = api.createInstrument(InstrumentFactories.Tape)
+            instrumentBox.label.setValue(name)
+            const audioFileBox = boxGraph.findBox<AudioFileBox>(uuid)
+                .unwrapOrElse(() => AudioFileBox.create(boxGraph, uuid, box => {
+                    box.fileName.setValue(name)
+                    box.startInSeconds.setValue(0)
+                    box.endInSeconds.setValue(sample.duration)
+                }))
+            AudioContentFactory.createNotStretchedRegion({
+                boxGraph, sample, audioFileBox, position: 0, targetTrack: trackBox
+            })
+        })
+        await Promises.tryCatch(this.sampleManager.getAudioData(uuid))
+        return importResult
     }
 
     runIfProject<R>(procedure: Func<Project, R>): Option<R> {

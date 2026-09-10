@@ -3,8 +3,11 @@ import {resolve} from "path"
 import {defineConfig} from "vite"
 import crossOriginIsolation from "vite-plugin-cross-origin-isolation"
 import viteCompression from "vite-plugin-compression"
+import {viteStaticCopy} from "vite-plugin-static-copy"
 import {BuildInfo} from "./src/BuildInfo"
 import {existsSync} from "node:fs"
+
+const ORT_DIST_DIR = resolve(__dirname, "../../../node_modules/onnxruntime-web/dist")
 
 export default defineConfig(({command}) => {
     const uuid = generateUUID()
@@ -32,7 +35,7 @@ export default defineConfig(({command}) => {
             }
         },
         optimizeDeps: {
-            exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util", "monaco-editor"]
+            exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util", "monaco-editor", "onnxruntime-web"]
         },
         build: {
             target: "esnext",
@@ -59,7 +62,7 @@ export default defineConfig(({command}) => {
         server: {
             port: 8080,
             host: "localhost",
-            https: command === "serve" ? {
+            https: command === "serve" && certsExist ? {
                 key: readFileSync(resolve(__dirname, "../../../certs/localhost-key.pem")),
                 cert: readFileSync(resolve(__dirname, "../../../certs/localhost.pem"))
             } : undefined,
@@ -67,6 +70,14 @@ export default defineConfig(({command}) => {
                 "Cross-Origin-Opener-Policy": "same-origin",
                 "Cross-Origin-Embedder-Policy": "require-corp",
                 "Cross-Origin-Resource-Policy": "cross-origin"
+            },
+            proxy: {
+                "/api-proxy": {
+                    target: "https://api.opendaw.studio",
+                    changeOrigin: true,
+                    rewrite: path => path.replace(/^\/api-proxy/, ""),
+                    secure: true
+                }
             },
             fs: {
                 // Allow serving files from the entire workspace
@@ -93,6 +104,15 @@ export default defineConfig(({command}) => {
             crossOriginIsolation(),
             viteCompression({
                 algorithm: "brotliCompress"
+            }),
+            viteStaticCopy({
+                targets: [
+                    {
+                        src: `${ORT_DIST_DIR.replace(/\\/g, "/")}/ort-wasm-simd-threaded.{wasm,mjs,jsep.wasm,jsep.mjs}`,
+                        dest: "ort",
+                        rename: {stripBase: true}
+                    }
+                ]
             }),
             {
                 name: "generate-date-json",

@@ -9,6 +9,7 @@ import {DemoProjectJson} from "@/ui/dashboard/DemoProjectJson"
 import {DemoProject} from "@/ui/dashboard/DemoProject"
 import {network, Promises} from "@opendaw/lib-runtime"
 import {ProjectBundle} from "@opendaw/studio-core"
+import {apiUrl} from "@/OpenDAWApi"
 
 const className = Html.adoptStyleSheet(css, "DemoProjects")
 
@@ -41,7 +42,7 @@ const ids = [
     "cab976763f0" // Vapor Run
 ]
 
-const listUrl = `https://api.opendaw.studio/music/list-by-ids.php?ids=${ids.join(",")}`
+const listUrl = apiUrl(`/music/list-by-ids.php?ids=${ids.join(",")}`)
 
 const NewProjectJson: DemoProjectJson = {
     id: "",
@@ -74,7 +75,7 @@ const loadDemoProject = async (service: StudioService, json: DemoProjectJson) =>
     const dialog = RuntimeNotifier.progress({headline: "Loading Demo Project"})
     const folder = json.id
     const {status, value: arrayBuffer, error} = await Promises.tryCatch(
-        fetch(`https://api.opendaw.studio/music/uploads/${folder}/project.odb`)
+        fetch(apiUrl(`/music/uploads/${folder}/project.odb`))
             .then(network.progress(progress => dialog.message = `Downloading bundle file... (${(progress * 100).toFixed(1)}%)`))
             .then(x => x.arrayBuffer()))
     dialog.terminate()

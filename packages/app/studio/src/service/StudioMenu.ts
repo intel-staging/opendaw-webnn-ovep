@@ -9,6 +9,8 @@ import {GlobalShortcuts} from "@/ui/shortcuts/GlobalShortcuts"
 import {VideoRenderer} from "@/video/VideoRenderer"
 import {createDebugMenu} from "@/service/DebugMenu"
 import {connectRoom} from "@/service/StudioLiveRoomConnect"
+import {showStemSeparatorDialog} from "@/ui/dialogs/StemSeparatorDialog"
+import {showNoiseSuppressorDialog} from "@/ui/dialogs/NoiseSuppressorDialog"
 
 export const populateStudioMenu = (service: StudioService) => {
     const Global = GlobalShortcuts
@@ -44,6 +46,10 @@ export const populateStudioMenu = (service: StudioService) => {
                                 .setTriggerProcedure(() => service.sampleService.browse(true)),
                             MenuItem.default({label: "Stems (Zip)..."})
                                 .setTriggerProcedure(() => service.importStems()),
+                            MenuItem.default({label: "Separate Stems..."})
+                                .setTriggerProcedure(() => showStemSeparatorDialog(service).then(EmptyExec, EmptyExec)),
+                            MenuItem.default({label: "Suppress Noise (AI)..."})
+                                .setTriggerProcedure(() => showNoiseSuppressorDialog(service).then(EmptyExec, EmptyExec)),
                             MenuItem.default({label: "Soundfont Files..."})
                                 .setTriggerProcedure(() => service.soundfontService.browse(true)),
                             MenuItem.default({label: "Project Bundle..."})

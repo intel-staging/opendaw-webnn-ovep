@@ -1,4 +1,5 @@
 import {Nullable, Option, isAbsent} from "@opendaw/lib-std"
+import {apiUrl} from "@/OpenDAWApi"
 
 export type DailySeries = ReadonlyArray<readonly [date: string, value: number]>
 
@@ -70,16 +71,30 @@ const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
     return await response.json() as T
 }
 
+type RoomResultBreakdown = {
+    success?: number
+    sync_timeout?: number
+    socket_error?: number
+    abort?: number
+    unknown?: number
+}
+
 export const fetchRoomStats = async (): Promise<RoomStats> => {
-    const [count, duration] = await Promise.all([
-        fetchJson<Record<string, number>>("https://live.opendaw.studio/stats/rooms-count.json", {mode: "cors"}),
-        fetchJson<Record<string, number>>("https://live.opendaw.studio/stats/rooms-duration.json", {mode: "cors"})
+    const [results, duration] = await Promise.all([
+        fetchJson<Record<string, RoomResultBreakdown>>(
+            "https://api.opendaw.studio/rooms/rooms-result.json", {mode: "cors", cache: "no-store"}).catch(() => ({})),
+        fetchJson<Record<string, number>>(
+            "https://api.opendaw.studio/rooms/rooms-duration.json", {mode: "cors", cache: "no-store"}).catch(() => ({}))
     ])
-    return {count: sortByDate(count), duration: sortByDate(duration)}
+    const counts: Record<string, number> = {}
+    for (const [date, breakdown] of Object.entries(results)) {
+        counts[date] = breakdown.success ?? 0
+    }
+    return {count: sortByDate(counts), duration: sortByDate(duration)}
 }
 
 export const fetchUserStats = async (): Promise<DailySeries> => {
-    const data = await fetchJson<Record<string, number>>("https://api.opendaw.studio/users/graph.json", {
+    const data = await fetchJson<Record<string, number>>(apiUrl("/users/graph.json"), {
         mode: "cors",
         credentials: "include"
     })
@@ -197,7 +212,7 @@ export type LatencyStats = { distribution: DailySeries, unsupported: number, out
 
 export const fetchLatencyStats = async (): Promise<LatencyStats> => {
     const data = await fetchJson<Record<string, number>>(
-        "https://api.opendaw.studio/latency/latency.json", {mode: "cors"})
+        apiUrl("/latency/latency.json"), {mode: "cors"})
     const unsupported = data["-1"] ?? 0
     const outliers = data["500"] ?? 0
     const buckets = new Map<number, number>()
@@ -217,7 +232,7 @@ export const fetchLatencyStats = async (): Promise<LatencyStats> => {
 
 export const fetchVisitorStats = async (): Promise<DailySeries> => {
     const data = await fetchJson<Record<string, ReadonlyArray<string>>>(
-        "https://api.opendaw.studio/users/visitors.json", {mode: "cors"})
+        apiUrl("/users/visitors.json"), {mode: "cors"})
     const counts: Record<string, number> = {}
     for (const [date, ids] of Object.entries(data)) {
         counts[date] = ids.length
@@ -230,6 +245,12 @@ export const sumValues = (series: DailySeries): number =>
 
 export const lastValue = (series: DailySeries): number =>
     series.length === 0 ? 0 : series[series.length - 1][1]
+
+// The most recent day in any DailySeries is still being written to, so its
+// value is always partial. Drop it before charting/trending — otherwise the
+// last point sits below the trend and skews any visual reading.
+export const dropPartialDay = (series: DailySeries): DailySeries =>
+    series.length > 0 ? series.slice(0, -1) : series
 
 export const minutesToHours = (series: DailySeries): DailySeries =>
     series.map(([date, minutes]) => [date, minutes / 60] as const)

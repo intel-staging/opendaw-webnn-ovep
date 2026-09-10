@@ -26,7 +26,18 @@
 - **Move complex field initializations into the constructor** rather than using inline field initializers.
 - **Always use `--noEmit` when type-checking** to avoid generating waste `.js`/`.d.ts` files.
 
+## Documentation
+
+- **AI audio features (stem separation, noise suppression):** see [docs/ai-audio-features.md](docs/ai-audio-features.md) for the architecture, per-stage call chains, and known issues/fragile code before touching `service/stem-separator/`, `service/noise-suppressor/`, or `service/ort-shared/`.
+
 ## Workflow
 
 - **Analyze bugs and propose fixes, but wait for approval before editing code.**
 - **Never use `Write` to rewrite existing files** — always use `Edit` (small diffs).
+
+## Session & Cost Efficiency
+
+- **Never use bash heredocs or `cat >` to write files** — always use `Write` or `Edit` tools.
+- **When conversation exceeds 100 messages, suggest `/compact`.**
+- **When entering a repetitive debug loop on isolated files, recommend starting a fresh session with only those files.**
+- **Use Opus for planning/architecture only — switch to Sonnet for iterative debugging loops.**

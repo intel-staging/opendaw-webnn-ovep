@@ -1,4 +1,5 @@
 import {OfflineEngineRenderer, ProjectBundle, ProjectProfile} from "@opendaw/studio-core"
+import {apiUrl} from "@/OpenDAWApi"
 import {WavFile} from "@opendaw/lib-dsp"
 import {DefaultObservableValue, isDefined, Option, panic, Procedure, Progress} from "@opendaw/lib-std"
 import {Promises} from "@opendaw/lib-runtime"
@@ -55,7 +56,7 @@ export namespace PublishMusic {
         })
         xhr.addEventListener("error", () => reject(new Error("Network error")))
         xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")))
-        xhr.open("POST", "https://api.opendaw.studio/music/upload.php")
+        xhr.open("POST", apiUrl("/music/upload.php"))
         xhr.send(formData)
         return promise
     }
@@ -63,7 +64,7 @@ export namespace PublishMusic {
     export const deleteMusic = async (token: string): Promise<void> => {
         const formData = new FormData()
         formData.append("token", token)
-        const response = await fetch("https://api.opendaw.studio/music/delete.php", {
+        const response = await fetch(apiUrl("/music/delete.php"), {
             method: "POST",
             body: formData
         })

@@ -5,6 +5,7 @@ import {Html} from "@opendaw/lib-dom"
 import {network, Promises} from "@opendaw/lib-runtime"
 import {Option, RuntimeNotifier} from "@opendaw/lib-std"
 import {ProjectBundle} from "@opendaw/studio-core"
+import {apiUrl} from "@/OpenDAWApi"
 
 const className = Html.adoptStyleSheet(css, "OpenBundlePage")
 
@@ -15,7 +16,7 @@ export const OpenBundlePage: PageFactory<StudioService> = ({service, path}: Page
             const dialog = RuntimeNotifier.progress({headline: "Loading bundle file..."})
             const folder = path.substring(path.lastIndexOf("/") + 1)
             const {status, value: arrayBuffer, error} = await Promises.tryCatch(
-                fetch(`https://api.opendaw.studio/music/uploads/${folder}/project.odb`)
+                fetch(apiUrl(`/music/uploads/${folder}/project.odb`))
                     .then(network.progress(progress => message.textContent = `Downloading Bundle... (${(progress * 100).toFixed(1)}%)`))
                     .then(x => x.arrayBuffer()))
             dialog.terminate()

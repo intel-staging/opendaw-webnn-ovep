@@ -1,6 +1,7 @@
 import {Browser} from "@opendaw/lib-dom"
+import {apiUrl} from "@/OpenDAWApi"
 
-const API_URL = "https://api.opendaw.studio/users/visitor-counter.php"
+const API_URL = apiUrl("/users/visitor-counter.php")
 const STORAGE_KEY = "visitor-reported-date"
 
 export const reportVisitor = (): void => {

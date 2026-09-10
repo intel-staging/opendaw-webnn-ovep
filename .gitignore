@@ -21,3 +21,15 @@ lerna-debug.log
 /packages/app/soundfont/public/soundfonts/
 /packages/studio/scripting/src/api.declaration.d.ts
 tsconfig.tsbuildinfo
+
+# AI audio models — fetched by `npm run models:fetch`
+/packages/app/studio/public/models/
+
+# Local-only AI development artefacts
+/htdemucs-demo/
+/deepfilternet2-demo/
+
+# Claude Code
+.claude/
+/packages/server/api.opendaw.studio/
+/packages/server/logs.opendaw.studio/
