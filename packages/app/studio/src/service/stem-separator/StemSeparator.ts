@@ -61,7 +61,7 @@ export class StemSeparator {
         const ort = await loadOrt()
         const sessionOptions: InferenceSession.SessionOptions = {
             executionProviders: [],
-            logSeverityLevel: 3,
+            logSeverityLevel: 2,
             externalData: [{data: weights, path: "htdemucs_fwd.onnx.data"}]
         }
         if (backend === "webnn-npu" || backend === "webnn-gpu") {

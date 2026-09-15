@@ -71,6 +71,7 @@ export const showStemSeparatorDialog = async (service: StudioService, preloaded?
     const selectedBackend = new DefaultObservableValue<OrtBackend>("wasm")
 
     const pushLog = (message: string) => {
+        console.log(`[stem-separator] ${message}`)
         const lines = logMessages.getValue()
         logMessages.setValue([...lines.slice(-99), message])
     }
@@ -312,6 +313,7 @@ export const showStemSeparatorDialog = async (service: StudioService, preloaded?
                 state.setValue("idle")
                 return
             }
+            console.error("[stem-separator] model load failed", error)
             pushLog(`Error loading model: ${Errors.toString(error)}`)
             statusMessage.setValue("Failed to load model. See log for details.")
             state.setValue("error")

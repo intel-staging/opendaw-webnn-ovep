@@ -1,4 +1,4 @@
-import {Errors, Procedure, Progress} from "@opendaw/lib-std"
+import {Errors, isDefined, Procedure, Progress} from "@opendaw/lib-std"
 import {
     DeepFilter3Variant,
     ModelAsset,
@@ -21,6 +21,9 @@ export type ModelLoadCallbacks = {
     readonly variant?: DeepFilter3Variant
 }
 
+const isTruncated = (asset: ModelAsset, byteLength: number): boolean =>
+    isDefined(asset.exactBytes) && byteLength !== asset.exactBytes
+
 const loadOneAsset = async (
     asset: ModelAsset,
     onProgress: Progress.Handler,
@@ -30,7 +33,11 @@ const loadOneAsset = async (
     if (signal.aborted) {throw Errors.AbortError}
     log(`Checking cache for ${asset.label}…`)
     const cached = await readFromOpfs(asset.opfsPath)
-    if (cached !== null) {
+    if (cached !== null && isTruncated(asset, cached.byteLength)) {
+        // An interrupted write leaves a short file behind; reading it back yields a corrupt model.
+        log(`✗ ${asset.label} cache is ${cached.byteLength} bytes, expected ${asset.exactBytes} — re-downloading`)
+        await removeFromOpfs(asset.opfsPath)
+    } else if (cached !== null) {
         log(`✓ ${asset.label} loaded from cache (${(cached.byteLength / 1_048_576).toFixed(1)} MB)`)
         onProgress(1)
         return cached
@@ -40,6 +47,9 @@ const loadOneAsset = async (
     const [fetchProgress, writeProgress] = Progress.splitWithWeights(onProgress, [95, 5])
     const buffer = await fetchWithProgress(url, fetchProgress, signal)
     if (signal.aborted) {throw Errors.AbortError}
+    if (isTruncated(asset, buffer.byteLength)) {
+        throw new Error(`${asset.label}: downloaded ${buffer.byteLength} bytes, expected ${asset.exactBytes}`)
+    }
     log(`Caching ${asset.label} (${(buffer.byteLength / 1_048_576).toFixed(1)} MB)…`)
     const wroteOk = await writeToOpfs(asset.opfsPath, buffer, error => {
         log(`OPFS write failed for ${asset.label}: ${Errors.toString(error)}`)
