@@ -240,8 +240,8 @@ export class EngineHost {
     }
 }
 
-export interface RunArgs<I, O> {
-    readonly task: TaskDefinition<I, O>
+export interface RunArgs<I, O, P = never> {
+    readonly task: TaskDefinition<I, O, P>
     readonly input: I
     readonly progress: Procedure<unitValue>
     readonly signal: Option<AbortSignal>
@@ -253,6 +253,7 @@ export interface RunArgs<I, O> {
      * cache hit) and the dialog should map 0..1 directly to inference.
      */
     readonly downloadShare?: number
+    readonly onPartial?: Procedure<P>
 }
 
 export const splitProgress = (
@@ -266,7 +267,7 @@ export const splitProgress = (
     }
 }
 
-export const runTask = async <I, O>(host: EngineHost, args: RunArgs<I, O>): Promise<O> => {
+export const runTask = async <I, O, P = never>(host: EngineHost, args: RunArgs<I, O, P>): Promise<O> => {
     const overall = args.progress
     const share = args.downloadShare ?? 0.5
     const split = splitProgress(overall, share)
@@ -281,6 +282,7 @@ export const runTask = async <I, O>(host: EngineHost, args: RunArgs<I, O>): Prom
         progress: split.inference,
         signal: args.signal,
         inputNames: names.inputs,
-        outputNames: names.outputs
+        outputNames: names.outputs,
+        onPartial: args.onPartial
     })
 }
