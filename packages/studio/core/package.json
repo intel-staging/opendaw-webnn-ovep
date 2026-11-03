@@ -48,7 +48,7 @@
     "dropbox": "^10.34.0",
     "y-websocket": "^1.4.5",
     "yjs": "^13.6.27",
-    "zod": "^4.1.12"
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
